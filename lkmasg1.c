@@ -1,6 +1,7 @@
 /**
  * File:	lkmasg1.c
  * Adapted for Linux 5.15 by: John Aedo
+ * Forked by: Jake Norris and D'Antae Aronne
  * Class:	COP4600-SP23
  */
 
@@ -11,6 +12,7 @@
 #include <linux/uaccess.h>	  // User access copy function support.
 #define DEVICE_NAME "lkmasg1" // Device name.
 #define CLASS_NAME "char"	  ///< The device class -- this is a character device driver
+#define SUCCESS 0
 
 MODULE_LICENSE("GPL");						 ///< The license type -- this affects available functionality
 MODULE_AUTHOR("John Aedo");					 ///< The author -- visible when you use modinfo
@@ -20,7 +22,8 @@ MODULE_VERSION("0.1");						 ///< A version number to inform users
 /**
  * Important variables that store data and keep track of relevant information.
  */
-static int major_number;
+static int major_number; // Stores the major number of the device driver
+static int device_open = 0; // Boolean to track whether the device is open
 
 static struct class *lkmasg1Class = NULL;	///< The device-driver class struct pointer
 static struct device *lkmasg1Device = NULL; ///< The device-driver device struct pointer
@@ -82,7 +85,7 @@ int init_module(void)
 	}
 	printk(KERN_INFO "lkmasg1: device class created correctly\n"); // Made it! device was initialized
 
-	return 0;
+	return SUCCESS;
 }
 
 /*
@@ -105,8 +108,19 @@ void cleanup_module(void)
  */
 static int open(struct inode *inodep, struct file *filep)
 {
+	// Check to see if the device is currently open
+	if (device_open)
+	{
+		return -EBUSY;
+	}
+
+	// Increment to indicate we have now opened the device
+	device_open++;
+	
 	printk(KERN_INFO "lkmasg1: device opened.\n");
-	return 0;
+
+	try_module_get(THIS_MODULE);
+	return SUCCESS;
 }
 
 /*
@@ -114,8 +128,10 @@ static int open(struct inode *inodep, struct file *filep)
  */
 static int close(struct inode *inodep, struct file *filep)
 {
+	device_open--;
+	
 	printk(KERN_INFO "lkmasg1: device closed.\n");
-	return 0;
+	return SUCCESS;
 }
 
 /*
@@ -124,7 +140,7 @@ static int close(struct inode *inodep, struct file *filep)
 static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset)
 {
 	printk(KERN_INFO "read stub");
-	return 0;
+	return SUCCESS;
 }
 
 /*
