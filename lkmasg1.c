@@ -13,6 +13,7 @@
 #define DEVICE_NAME "lkmasg1" // Device name.
 #define CLASS_NAME "char"	  ///< The device class -- this is a character device driver
 #define SUCCESS 0
+#define BUF_LEN 1024          // Max length of a message
 
 MODULE_LICENSE("GPL");						 ///< The license type -- this affects available functionality
 MODULE_AUTHOR("John Aedo");					 ///< The author -- visible when you use modinfo
@@ -27,6 +28,9 @@ static int device_open = 0; // Boolean to track whether the device is open
 
 static struct class *lkmasg1Class = NULL;	///< The device-driver class struct pointer
 static struct device *lkmasg1Device = NULL; ///< The device-driver device struct pointer
+
+static char msg[BUF_LEN]; // Message the device will give when asked
+static int msg_size; // Size of the message written to the device
 
 /**
  * Prototype functions for file operations.
@@ -108,18 +112,18 @@ void cleanup_module(void)
  */
 static int open(struct inode *inodep, struct file *filep)
 {
-	// Check to see if the device is currently open
+	// Return an error if the device is already open, and report to the kernel.
 	if (device_open)
 	{
+		printk(KERN_INFO "lkmasg1: device is busy.\n");
 		return -EBUSY;
 	}
 
 	// Increment to indicate we have now opened the device
 	device_open++;
-	
-	printk(KERN_INFO "lkmasg1: device opened.\n");
 
-	try_module_get(THIS_MODULE);
+	// Return success upon opening the device without error, and report to the kernel.
+	printk(KERN_INFO "lkmasg1: device opened.\n");
 	return SUCCESS;
 }
 
@@ -128,8 +132,10 @@ static int open(struct inode *inodep, struct file *filep)
  */
 static int close(struct inode *inodep, struct file *filep)
 {
+	// Decrement to indicate the device is now closed
 	device_open--;
-	
+
+	// Return success upon opening the device without error, and report it to the kernel.
 	printk(KERN_INFO "lkmasg1: device closed.\n");
 	return SUCCESS;
 }
@@ -139,8 +145,22 @@ static int close(struct inode *inodep, struct file *filep)
  */
 static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset)
 {
-	printk(KERN_INFO "read stub");
-	return SUCCESS;
+	// Send the message to user space, and store the number of bytes that could not be copied
+	// On success, this should be zero.
+	int uncopied_bytes = copy_to_user(buffer, msg, msg_size);
+
+	// If the message was successfully sent to user space, report this
+	// to the kernel and return success.
+	// TODO: Remove the message from the queue once read.
+	if (uncopied_bytes == 0)
+	{
+		printk(KERN_INFO "lkmasg1: read stub");
+		return SUCCESS;
+	}
+
+	// Return with an error indicating bad address if we cannot copy the message to user space.
+	printk(KERN_INFO "lkmasg1: failed to read stub");
+	return -EFAULT;
 }
 
 /*
@@ -148,6 +168,20 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
  */
 static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
 {
-	printk(KERN_INFO "write stub");
-	return len;
+	// If the file is larger than the amount of bytes the device can hold, return an error.
+	// TODO: Make this check how many bytes are left in the queue.
+	if (len > BUF_LEN)
+	{
+		printk(KERN_INFO "lkmasg1: file too large");
+		return -EFBIG;
+	}
+	
+	// Write the input to the device, and update the length of the message.
+	// TODO: Make this work as a FIFO queue, so that multiple messages can be stored. (This is a requirement of the assignment)
+	sprintf(msg, "%s", buffer);
+	msg_size = len;
+
+	// Return success upon writing the message to the device without error, and report it to the kernel.
+	printk(KERN_INFO "lkmasg1: write stub");
+	return SUCCESS;
 }
