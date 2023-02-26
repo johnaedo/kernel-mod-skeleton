@@ -29,8 +29,22 @@ static int device_open = 0; // Boolean to track whether the device is open
 static struct class *lkmasg1Class = NULL;	///< The device-driver class struct pointer
 static struct device *lkmasg1Device = NULL; ///< The device-driver device struct pointer
 
-static char msg[BUF_LEN]; // Message the device will give when asked
-static int msg_size; // Size of the message written to the device
+struct msgs
+{
+    char *msg;
+    int msg_size;
+    struct msgs *next;
+};
+
+struct queue
+{
+    struct msgs *top;
+    struct msgs *bottom;
+}*q;
+
+//static char msg[BUF_LEN]; // Message the device will give when asked
+//static int msg_size; // Size of the message written to the device
+static int all_msg_size = 0; // Size of all the messages written to the device
 
 /**
  * Prototype functions for file operations.
@@ -147,13 +161,27 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 {
 	// Send the message to user space, and store the number of bytes that could not be copied
 	// On success, this should be zero.
-	int uncopied_bytes = copy_to_user(buffer, msg, msg_size);
+	int uncopied_bytes = copy_to_user(buffer, q.top.msg, q.top.msg_size);
 
 	// If the message was successfully sent to user space, report this
 	// to the kernel and return success.
 	// TODO: Remove the message from the queue once read.
 	if (uncopied_bytes == 0)
 	{
+		if (q->top != NULL)
+		{
+			struct msgs *ptr;
+			ptr = q.top;
+			q.top = q.top.next;
+			if (q.top == NULL)
+			{
+				q.bottom = NULL;
+			}
+			ptr.next = NULL;
+      all_msg_size -= ptr.msg_size;
+			free(ptr);
+      
+		}		
 		printk(KERN_INFO "lkmasg1: read stub");
 		return SUCCESS;
 	}
@@ -169,17 +197,32 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
 {
 	// If the file is larger than the amount of bytes the device can hold, return an error.
-	// TODO: Make this check how many bytes are left in the queue.
-	if (len > BUF_LEN)
+	if ((len + all_msg_size) > BUF_LEN)
 	{
 		printk(KERN_INFO "lkmasg1: file too large");
 		return -EFBIG;
 	}
 	
+	// Check how many bytes are left in the queue.
+	bytes_left = BUF_LEN - (len + all_msg_size);
+	
 	// Write the input to the device, and update the length of the message.
-	// TODO: Make this work as a FIFO queue, so that multiple messages can be stored. (This is a requirement of the assignment)
-	sprintf(msg, "%s", buffer);
-	msg_size = len;
+	// Work as a FIFO queue, so that multiple messages can be stored.
+	struct msgs *ptr;
+	ptr.msg = realloc(NULL, len);
+	sprintf(ptr.msg, "%s", buffer);
+	ptr.msg_size = len;
+	all_msg_size += len
+	ptr.next=NULL;
+	if (q->top==NULL && q->bottom==NULL)
+	{
+		q.top = q.bottom = ptr;
+	}
+	else
+	{
+		q->bottom->next=ptr;
+		q->bottom=ptr;
+	}
 
 	// Return success upon writing the message to the device without error, and report it to the kernel.
 	printk(KERN_INFO "lkmasg1: write stub");
