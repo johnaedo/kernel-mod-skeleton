@@ -161,7 +161,7 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 {
 	// Send the message to user space, and store the number of bytes that could not be copied
 	// On success, this should be zero.
-	int uncopied_bytes = copy_to_user(buffer, q.top.msg, q.top.msg_size);
+	int uncopied_bytes = copy_to_user(buffer, q->top->msg, q->top->msg_size);
 
 	// If the message was successfully sent to user space, report this
 	// to the kernel and return success.
@@ -171,14 +171,14 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 		if (q->top != NULL)
 		{
 			struct msgs *ptr;
-			ptr = q.top;
-			q.top = q.top.next;
-			if (q.top == NULL)
+			ptr = q->top;
+			q->top = q->top->next;
+			if (q->top == NULL)
 			{
-				q.bottom = NULL;
+				q->bottom = NULL;
 			}
-			ptr.next = NULL;
-      all_msg_size -= ptr.msg_size;
+			ptr->next = NULL;
+      all_msg_size -= ptr->msg_size;
 			free(ptr);
       
 		}		
@@ -209,14 +209,14 @@ static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t 
 	// Write the input to the device, and update the length of the message.
 	// Work as a FIFO queue, so that multiple messages can be stored.
 	struct msgs *ptr;
-	ptr.msg = realloc(NULL, len);
-	sprintf(ptr.msg, "%s", buffer);
-	ptr.msg_size = len;
+	ptr->msg = realloc(NULL, len);
+	sprintf(ptr->msg, "%s", buffer);
+	ptr->msg_size = len;
 	all_msg_size += len
-	ptr.next=NULL;
+	ptr->next=NULL;
 	if (q->top==NULL && q->bottom==NULL)
 	{
-		q.top = q.bottom = ptr;
+		q->top = q->bottom = ptr;
 	}
 	else
 	{
