@@ -11,6 +11,7 @@
 #include <linux/uaccess.h>	  // User access copy function support.
 #define DEVICE_NAME "lkmasg1" // Device name.
 #define CLASS_NAME "char"	  ///< The device class -- this is a character device driver
+#define BUFFER_LENGTH 1024           ///< The buffer length (crude but fine)
 
 MODULE_LICENSE("GPL");						 ///< The license type -- this affects available functionality
 MODULE_AUTHOR("John Aedo");					 ///< The author -- visible when you use modinfo
@@ -21,6 +22,9 @@ MODULE_VERSION("0.1");						 ///< A version number to inform users
  * Important variables that store data and keep track of relevant information.
  */
 static int major_number;
+static char   message[BUFFER_LENGTH] = {0};           ///< Memory for the string that is passed from userspace
+static short  size_of_message;              ///< Used to remember the size of the string stored
+static int    numberOpens = 0;              ///< Counts the number of times the device is opened
 
 static struct class *lkmasg1Class = NULL;	///< The device-driver class struct pointer
 static struct device *lkmasg1Device = NULL; ///< The device-driver device struct pointer
@@ -106,6 +110,8 @@ void cleanup_module(void)
 static int open(struct inode *inodep, struct file *filep)
 {
 	printk(KERN_INFO "lkmasg1: device opened.\n");
+	numberOpens++;
+	printk(KERN_INFO "lkmasg1: Device has been opened %d time(s)\n", numberOpens);
 	return 0;
 }
 
@@ -123,8 +129,24 @@ static int close(struct inode *inodep, struct file *filep)
  */
 static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset)
 {
-	printk(KERN_INFO "read stub");
-	return 0;
+   int error_count = 0;
+   if (message == NULL)
+   {
+	   printk(KERN_INFO "lkmasg1: No message to read.\n");
+	   return 0;
+   }
+
+   // copy_to_user has the format ( * to, *from, size) and returns 0 on success
+   error_count = copy_to_user(buffer, message, size_of_message);
+ 
+   if (error_count==0){            // if true then have success
+      printk(KERN_INFO "lkmasg1: Sent %d characters to the user\n", size_of_message);
+      return (size_of_message=0);  // clear the position to the start and return 0
+   }
+   else {
+      printk(KERN_INFO "lkmasg1: Failed to send %d characters to the user\n", error_count);
+      return -EFAULT;              // Failed -- return a bad address message (i.e. -14)
+   }
 }
 
 /*
@@ -132,6 +154,21 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
  */
 static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
 {
-	printk(KERN_INFO "write stub");
+	if (message == NULL)
+	{
+		printk(KERN_INFO "lkmasg1: No message to write.\n");
+		return 0;
+	}
+	if (len > BUFFER_LENGTH)
+	{
+		printk(KERN_INFO "lkmasg1: Message too long. Buffer size is %zu, but max size is %d\n", len, BUFFER_LENGTH - 1);
+
+	}
+	for (int i = 0; i < BUFFER_LENGTH - 1; i++)
+	{
+		message[i] = buffer[i];
+	}
+	size_of_message = strlen(message);                 // store the length of the stored message
+	printk(KERN_INFO "lkmasg1: Received %zu characters from the user\n", len);
 	return len;
 }
