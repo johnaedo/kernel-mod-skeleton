@@ -10,6 +10,7 @@
 #include <linux/kernel.h>	  // Kernel header for convenient functions.
 #include <linux/fs.h>		  // File-system support.
 #include <linux/uaccess.h>	  // User access copy function support.
+#include <stdlib.h>
 #define DEVICE_NAME "lkmasg1" // Device name.
 #define CLASS_NAME "char"	  ///< The device class -- this is a character device driver
 #define SUCCESS 0
@@ -178,9 +179,8 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 				q->bottom = NULL;
 			}
 			ptr->next = NULL;
-      all_msg_size -= ptr->msg_size;
+      		all_msg_size -= ptr->msg_size;
 			free(ptr);
-      
 		}		
 		printk(KERN_INFO "lkmasg1: read stub");
 		return SUCCESS;
@@ -212,7 +212,7 @@ static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t 
 	ptr->msg = realloc(NULL, len);
 	sprintf(ptr->msg, "%s", buffer);
 	ptr->msg_size = len;
-	all_msg_size += len
+	all_msg_size += len;
 	ptr->next=NULL;
 	if (q->top==NULL && q->bottom==NULL)
 	{
