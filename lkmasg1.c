@@ -10,7 +10,9 @@
 #include <linux/kernel.h>	  // Kernel header for convenient functions.
 #include <linux/fs.h>		  // File-system support.
 #include <linux/uaccess.h>	  // User access copy function support.
-#include <stdlib.h>
+#include <linux/slab.h>
+#include <linux/gfp.h>
+
 #define DEVICE_NAME "lkmasg1" // Device name.
 #define CLASS_NAME "char"	  ///< The device class -- this is a character device driver
 #define SUCCESS 0
@@ -180,7 +182,7 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 			}
 			ptr->next = NULL;
       		all_msg_size -= ptr->msg_size;
-			free(ptr);
+			kfree(ptr);
 		}		
 		printk(KERN_INFO "lkmasg1: read stub");
 		return SUCCESS;
@@ -204,12 +206,13 @@ static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t 
 	}
 	
 	// Check how many bytes are left in the queue.
-	bytes_left = BUF_LEN - (len + all_msg_size);
+	// TODO: Remove this, it isn't used for anything
+	int bytes_left = BUF_LEN - (len + all_msg_size);
 	
 	// Write the input to the device, and update the length of the message.
 	// Work as a FIFO queue, so that multiple messages can be stored.
 	struct msgs *ptr;
-	ptr->msg = realloc(NULL, len);
+	ptr->msg = krealloc(NULL, len, GFP_KERNEL);
 	sprintf(ptr->msg, "%s", buffer);
 	ptr->msg_size = len;
 	all_msg_size += len;
