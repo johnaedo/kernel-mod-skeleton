@@ -32,23 +32,24 @@ static int device_open = 0; // Boolean to track whether the device is open
 static struct class *lkmasg1Class = NULL;	///< The device-driver class struct pointer
 static struct device *lkmasg1Device = NULL; ///< The device-driver device struct pointer
 
-struct msgs
+static struct msgs
 {
     char *msg;
     int msg_size;
     struct msgs *next;
 };
 
-struct queue
+static struct queue
 {
     struct msgs *top;
     struct msgs *bottom;
 }*q;
 
+struct msgs *ptr;
+
 //static char msg[BUF_LEN]; // Message the device will give when asked
 //static int msg_size; // Size of the message written to the device
-static int all_msg_size = 0; // Size of all the messages written to the device
-
+static int all_msg_size;// Size of all the messages written to the device
 /**
  * Prototype functions for file operations.
  */
@@ -135,7 +136,7 @@ static int open(struct inode *inodep, struct file *filep)
 		printk(KERN_INFO "lkmasg1: device is busy.\n");
 		return -EBUSY;
 	}
-
+	all_msg_size = 0;
 	// Increment to indicate we have now opened the device
 	device_open++;
 
@@ -165,15 +166,14 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 	// Send the message to user space, and store the number of bytes that could not be copied
 	// On success, this should be zero.
 	int uncopied_bytes = copy_to_user(buffer, q->top->msg, q->top->msg_size);
+	buffer = q->top->msg;
 
 	// If the message was successfully sent to user space, report this
 	// to the kernel and return success.
-	// TODO: Remove the message from the queue once read.
 	if (uncopied_bytes == 0)
 	{
 		if (q->top != NULL)
 		{
-			struct msgs *ptr;
 			ptr = q->top;
 			q->top = q->top->next;
 			if (q->top == NULL)
@@ -181,7 +181,7 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 				q->bottom = NULL;
 			}
 			ptr->next = NULL;
-      		all_msg_size -= ptr->msg_size;
+      			all_msg_size -= ptr->msg_size;
 			kfree(ptr);
 		}		
 		printk(KERN_INFO "lkmasg1: read stub");
@@ -205,13 +205,13 @@ static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t 
 		return -EFBIG;
 	}
 	
-	// Check how many bytes are left in the queue.
-	// TODO: Remove this, it isn't used for anything
-	int bytes_left = BUF_LEN - (len + all_msg_size);
-	
+	if (all_msg_size == 0){
+		q->top = NULL;
+		q->bottom = NULL;
+	}
+
 	// Write the input to the device, and update the length of the message.
 	// Work as a FIFO queue, so that multiple messages can be stored.
-	struct msgs *ptr;
 	ptr->msg = krealloc(NULL, len, GFP_KERNEL);
 	sprintf(ptr->msg, "%s", buffer);
 	ptr->msg_size = len;
