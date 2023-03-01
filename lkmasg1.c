@@ -202,10 +202,10 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
 {
 	// If the file is larger than the amount of bytes the device can hold, return an error.
+	int remaining_bytes = -1;
 	if ((len + all_msg_size) > BUF_LEN)
 	{
-		printk(KERN_INFO "lkmasg1: file too large");
-		return -EFBIG;
+		remaining_bytes = BUF_LEN - all_msg_size;
 	}
 
 	if (all_msg_size == 0){
@@ -217,9 +217,19 @@ static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t 
 	// Work as a FIFO queue, so that multiple messages can be stored.
 	struct msgs *ptr = kmalloc(sizeof(struct msgs), GFP_KERNEL);
 
-	int msg_mem_size = (len + 1) * sizeof(char);
-	ptr->msg = kmalloc(msg_mem_size, GFP_KERNEL);
-	sprintf(ptr->msg, "%s", buffer);
+	if (remaining_bytes == -1)
+	{
+		int msg_mem_size = (len + 1) * sizeof(char);
+		ptr->msg = kmalloc(msg_mem_size, GFP_KERNEL);
+		sprintf(ptr->msg, "%s", buffer);
+	}
+	else
+	{
+		int msg_mem_size = (remaining_bytes + 1) * sizeof(char);
+		ptr->msg = kmalloc(msg_mem_size, GFP_KERNEL);
+		sprintf(ptr->msg, "%.*s", remaining_bytes, buffer);
+	}
+
 
 	ptr->msg_size = len + 1;
 	all_msg_size += len +1;
