@@ -45,8 +45,6 @@ static struct queue
     struct msgs *bottom;
 }*q;
 
-struct msgs *ptr;
-
 //static char msg[BUF_LEN]; // Message the device will give when asked
 //static int msg_size; // Size of the message written to the device
 static int all_msg_size;// Size of all the messages written to the device
@@ -136,6 +134,9 @@ static int open(struct inode *inodep, struct file *filep)
 		printk(KERN_INFO "lkmasg1: device is busy.\n");
 		return -EBUSY;
 	}
+
+	q = kmalloc(sizeof(struct queue), GFP_KERNEL);
+
 	all_msg_size = 0;
 	// Increment to indicate we have now opened the device
 	device_open++;
@@ -155,6 +156,8 @@ static int close(struct inode *inodep, struct file *filep)
 
 	// Return success upon opening the device without error, and report it to the kernel.
 	printk(KERN_INFO "lkmasg1: device closed.\n");
+
+	kfree(q);
 	return SUCCESS;
 }
 
@@ -166,7 +169,7 @@ static ssize_t read(struct file *filep, char *buffer, size_t len, loff_t *offset
 	// Send the message to user space, and store the number of bytes that could not be copied
 	// On success, this should be zero.
 	int uncopied_bytes = copy_to_user(buffer, q->top->msg, q->top->msg_size);
-	buffer = q->top->msg;
+	struct msgs *ptr = kmalloc(sizeof(struct msgs), GFP_KERNEL);
 
 	// If the message was successfully sent to user space, report this
 	// to the kernel and return success.
@@ -204,7 +207,7 @@ static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t 
 		printk(KERN_INFO "lkmasg1: file too large");
 		return -EFBIG;
 	}
-	
+
 	if (all_msg_size == 0){
 		q->top = NULL;
 		q->bottom = NULL;
@@ -212,10 +215,15 @@ static ssize_t write(struct file *filep, const char *buffer, size_t len, loff_t 
 
 	// Write the input to the device, and update the length of the message.
 	// Work as a FIFO queue, so that multiple messages can be stored.
-	ptr->msg = krealloc(NULL, len, GFP_KERNEL);
+	struct msgs *ptr = kmalloc(sizeof(struct msgs), GFP_KERNEL);
+
+	int msg_mem_size = (len + 1) * sizeof(char);
+	ptr->msg = kmalloc(msg_mem_size, GFP_KERNEL);
 	sprintf(ptr->msg, "%s", buffer);
-	ptr->msg_size = len;
-	all_msg_size += len;
+
+	ptr->msg_size = len + 1;
+	all_msg_size += len +1;
+
 	ptr->next=NULL;
 	if (q->top==NULL && q->bottom==NULL)
 	{
