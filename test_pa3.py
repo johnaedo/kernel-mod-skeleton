@@ -14,9 +14,9 @@ def readDevice(readBytes, loopCount):
         
 def writeDevice(inputString, loopCount):
     for x in range(loopCount):
-        device = open("/dev/charkmod-in", "w")
-        bytesWritten = device.write(inputString)
-        device.close()
+        device = open("/dev/charkmod-in", os.O_RDWR)
+        bytesWritten = device.write(device, inputString)
+        os.close(device)
         print(f"write[{x}]: {bytesWritten} bytes written.")
 
 def main():
