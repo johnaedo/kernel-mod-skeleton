@@ -3,12 +3,12 @@
  * @author Derek Molloy
  * @date   7 April 2015
  * @version 0.1
- * @brief  A Linux user space program that communicates with the lkmasg2.c LKM. It passes a
+ * @brief  A Linux user space program that communicates with the charkmod.c LKM. It passes a
  * string to the LKM and reads the response from the LKM. For this example to work the device
- * must be called /dev/lkmasg2.
+ * must be called /dev/charkmod.
  * @see http://www.derekmolloy.ie/ for a full description and follow-up descriptions.
  *
- * Adapted for COP 4600 by Dr. John Aedo
+ * Adapted for COP 4600 by John Aedo
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,23 +17,25 @@
 #include <string.h>
 #include <unistd.h>
 
-#define BUFFER_LENGTH 256           ///< The buffer length (crude but fine)
-static char receive[BUFFER_LENGTH]; ///< The receive buffer from the LKM
 
 int main(int argc, char *argv[])
 {
-    if (argc != 2)
-    {
-        printf("Usage: test <path to device>\n");
-        exit(0);
+    int errno = 0;
+    if (argc != 3) {
+        printf("Usage:  simpletest <module name> <buffer size>\n");
     }
-    char *devicepath = argv[1];
+    char devicename[10] = argv[1];
+    int buffer_length = atoi(argv[2]);
+    char devicepath[15] = "/dev/";
+    strcat(devicepath, devicename);
+
+    char *receive = (char *) malloc(buffer_length * sizeof(char));
 
     int ret, fd;
-    char stringToSend[BUFFER_LENGTH];
-    strncpy(stringToSend, "", sizeof(stringToSend));
+    char stringToSend[buffer_length];
+    strcpy(stringToSend, "");
     printf("Starting device test code example...\n");
-    fd = open(devicepath, O_RDWR); // Open the device with read/write access
+    fd = open("/dev/charkmod", O_RDWR); // Open the device with read/write access
     if (fd < 0)
     {
         perror("Failed to open the device...");
@@ -41,6 +43,7 @@ int main(int argc, char *argv[])
     }
     printf("Type in a short string to send to the kernel module:\n");
     scanf("%[^\n]%*c", stringToSend); // Read in a string (with spaces)
+
     printf("Writing message to the device [%s].\n", stringToSend);
     ret = write(fd, stringToSend, strlen(stringToSend)); // Send the string to the LKM
     if (ret < 0)
@@ -53,7 +56,7 @@ int main(int argc, char *argv[])
     getchar();
 
     printf("Reading from the device...\n");
-    ret = read(fd, receive, BUFFER_LENGTH); // Read the response from the LKM
+    ret = read(fd, receive, buffer_length); // Read the response from the LKM
     if (ret < 0)
     {
         perror("Failed to read the message from the device.");
